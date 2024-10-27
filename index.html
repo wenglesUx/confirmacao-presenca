@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>todo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    
+    <style>
+        .hidden{
+            display:none
+        }
+    </style>
+</head>
+<body>
+    <h2>VITAL</h2>
+    <h3>TODO</h3>
+    <input type="text" name="" id="search-task">
+    <label for="sort-options">Ordenar por:</label>
+<select id="sort-options">
+  <option value="default">Ordem Padrão</option>
+  <option value="alphabetical">Ordem Alfabética</option>
+  <option value="date">Data de Criação</option>
+</select>
+    
+    <form action="process.php" method="POST">
+        <label for="task_title">Título da Tarefa:</label>
+        <input type="text" id="task_title" name="task_title" required><br>
+    
+        <label for="task_description">Descrição:</label>
+        <textarea id="task_description" name="task_description"></textarea><br>
+
+        
+        <button type="submit">Adicionar Tarefa</button>
+    </form>
+    
+    <ul id="task-container"></ul>
+    
+    <!-- Modal para editar descrição -->
+
+<!-- modal de informações -->
+
+<div class="modal" id="myModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Modal title</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form action="" class="task-oppened-area">
+            <input type="hidden" id="taskId" value=""> <!-- Campo escondido para o ID -->
+            <input type="text" id="text_title">
+            <input type="text" id="full_text_description">
+            <div id="task_status"></div>
+
+          </form>
+          <button class="delete-task">deletar</button>
+          <button class="complete-task">completar</button>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="saveChangesButton">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  
+<!-- script que cria a listagem e a interação com o modal -->
+<script>
+    $(document).ready(function () {
+        // Seleciona o modal usando Bootstrap
+        let myModal = new bootstrap.Modal($('.modal')[0]);
+        let selectedTaskId = null; // Armazenar o ID da tarefa selecionada
+
+        function fetchTasks() {
+            $.ajax({
+                url: 'fetch_data.php',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    let container = $('#task-container'); // Contêiner das tarefas
+                    container.empty(); // Limpa o contêiner antes de adicionar novos itens
+
+                    // Iterar sobre os dados e criar os elementos
+                    $.each(data, function (index, item) {
+                        let taskElement = $('<li>').text(`Task: ${item.task_title} - Status: ${item.task_status}`);
+                        taskElement.attr('data-date', item.created_at);
+
+                        // Evento de clique para abrir o modal com informações
+                        taskElement.on('click', function () {
+                            $('#text_title').val(item.task_title);
+                            $('#full_text_description').val(item.task_description);
+
+                            // Armazenar o ID da tarefa selecionada
+                            selectedTaskId = item.id;
+
+                            // Adicionar os dados nos botões do modal
+                            $('.complete-task').data('id', item.id);
+                            $('.complete-task').data('status', item.task_status); // Exemplo de status inicial
+                            $('.delete-task').data('id', item.id);
+
+                            // Exibir o modal
+                            myModal.show();
+                        });
+
+                        container.append(taskElement);
+                    });
+                },
+                error: function (error) {
+                    console.error('Erro ao buscar dados:', error);
+                }
+            });
+        }
+
+        // Evento do botão "Salvar alterações"
+        $('#saveChangesButton').on('click', function () {
+            if (selectedTaskId !== null) {
+                let taskTitle = $('#text_title').val();
+                let taskDescription = $('#full_text_description').val();
+
+                $.ajax({
+                    url: 'update_content.php',
+                    method: 'POST',
+                    data: {
+                        'task_id': selectedTaskId,
+                        'text_title': taskTitle,
+                        'full_text_description': taskDescription
+                    },
+                    dataType: 'json',
+                    success: function (data) {
+                        if (data.success) {
+                            alert('Tarefa atualizada com sucesso!');
+                        } else {
+                            alert('Erro ao atualizar: ' + data.error);
+                        }
+                        console.log("a tarefa foi atualizada")
+                    },
+                    error: function (error) {
+                        console.error('Erro:', error);
+                    }
+                });
+            } else {
+                alert('Nenhuma tarefa selecionada.');
+            }
+        });
+
+        // Completar tarefa dentro do modal
+        $(document).on('click', '.complete-task', function () {
+            var taskId = $(this).data('id'); // Pegar o ID da tarefa
+            var currentStatus = $(this).data('status'); // Pegar o status atual
+
+            if (taskId) {
+                $.ajax({
+                    url: 'update_task_status.php',
+                    method: 'POST',
+                    data: {
+                        task_id: taskId,
+                        current_status: currentStatus
+                    },
+                    success: function (response) {
+                        alert(response); // Exibe o retorno do PHP
+                        // fetchTasks(); // Atualiza a lista de tarefas
+                        console.log("a tarefa foi completada")
+                    },
+                    error: function (xhr, status, error) {
+                        console.log("Erro: " + error);
+                        console.log("Status: " + status);
+                        console.log("Resposta do servidor: " + xhr.responseText);
+                    }
+                    
+                });
+            }
+        });
+
+        // Remover tarefa dentro do modal
+        $(document).on('click', '.delete-task', function () {
+            var taskId = $(this).data('id'); // Pegar o ID da tarefa
+            if (confirm('Tem certeza de que deseja remover esta tarefa?')) {
+                $.ajax({
+                    url: 'delete_task.php',
+                    method: 'POST',
+                    data: { id: taskId },
+                    success: function (response) {
+                        alert(response); // Exibe a resposta do PHP
+                        // fetchTasks(); // Atualiza a lista de tarefas
+                        console.log("a tarefa foi deletada")
+                    },
+                    error: function (xhr, status, error) {
+                        console.log("Erro: " + error);
+                        console.log("Status: " + status);
+                        console.log("Resposta do servidor: " + xhr.responseText);
+                    }
+                });
+            }
+        });
+
+        // Chamar a função para buscar e exibir as tarefas
+        fetchTasks();
+    });
+</script>
+
+
+<!-- <script>
+    $(document).ready(function () {
+        // Seleciona o modal usando Bootstrap (certifique-se de que o Bootstrap JS está incluído no projeto)
+        let myModal = new bootstrap.Modal($('.modal')[0]);
+        let selectedTaskId = null; // Variável para armazenar o ID da tarefa selecionada
+
+        function fetchTasks() {
+            $.ajax({
+                url: 'fetch_data.php',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    let container = $('#task-container'); // Certifique-se de ter esse contêiner no seu HTML
+                    container.empty(); // Limpa o contêiner antes de adicionar novos itens
+
+                    // Iterar sobre os dados e criar elementos DOM
+                    $.each(data, function (index, item) {
+                        let taskElement = $('<li>').text(`Task: ${item.task_title} - Status: ${item.task_status}`);
+                        taskElement.attr('data-date', item.created_at);
+
+                        // Adicionar evento de clique para abrir o modal com as informações da tarefa
+                        taskElement.on('click', function () {
+                            $('#text_title').val(item.task_title);
+                            $('#full_text_description').val(item.task_description);
+
+                            // Armazenar o ID da tarefa selecionada
+                            selectedTaskId = item.id;
+
+                            // Exibir o modal
+                            myModal.show();
+                        });
+
+                        // Adicionar o elemento ao contêiner
+                        container.append(taskElement);
+
+                        console.log(item.created_at);
+                    });
+                },
+                error: function (error) {
+                    console.error('Erro ao buscar dados:', error);
+                }
+            });
+        }
+        var taskId = $(this).data('id'); // Pegar o ID da tarefa
+
+        // Evento do botão "Salvar alterações"
+        $('#saveChangesButton').on('click', function () {
+            if (selectedTaskId !== null) {
+                let taskTitle = $('#text_title').val();
+                let taskDescription = $('#full_text_description').val();
+
+                $.ajax({
+                    url: 'update_content.php',
+                    method: 'POST',
+                    data: {
+                        'task_id': selectedTaskId,
+                        'text_title': taskTitle,
+                        'full_text_description': taskDescription
+                    },
+                    dataType: 'json',
+                    success: function (data) {
+                        if (data.success) {
+                            alert('Tarefa atualizada com sucesso!');
+                        } else {
+                            alert('Erro ao atualizar: ' + data.error);
+                        }
+                    },
+                    error: function (error) {
+                        console.error('Erro:', error);
+                    }
+                });
+            } else {
+                alert('Nenhuma tarefa selecionada.');
+            }
+        });
+
+        $('.complete-task').click(function() {
+            var taskId = $(this).data('id'); // Pegar o ID da tarefa
+            var currentStatus = $(this).data('status'); // Pegar o status atual
+
+            $.ajax({
+                url: 'update_task_status.php',
+                method: 'POST',
+                data: {
+                    task_id: taskId,
+                    current_status: currentStatus
+                },
+                success: function(response) {
+                    alert(response); // Exibe o retorno do PHP
+                    location.reload(); // Atualiza a página para ver o novo status
+                },
+                error: function(xhr, status, error) {
+                    console.log("Erro: " + error);
+                    console.log("Status: " + status);
+                    console.log("Resposta do servidor: " + xhr.responseText);
+                }
+            });
+         });
+            
+
+             // Evento de clique para o botão "Remover"
+    $(document).on('click', '.delete-task', function() {
+            var taskId = $(this).data('id'); // Pegar o ID da tarefa
+            if (confirm('Tem certeza de que deseja remover esta tarefa?')) {
+                $.ajax({
+                    url: 'delete_task.php',
+                    method: 'POST',
+                    data: { id: taskId },
+                    success: function(response) {
+                        alert(response); // Exibe a resposta do PHP
+                        atualizarTabela(); // Atualiza a tabela após a exclusão
+                    },
+                    error: function(xhr, status, error) {
+                        console.log("Erro: " + error);
+                        console.log("Status: " + status);
+                        console.log("Resposta do servidor: " + xhr.responseText);
+                    }
+                });
+            }
+        });
+
+        // Chamar a função para buscar e exibir os dados
+        fetchTasks();
+    });
+</script> -->
+
+<!-- <script>
+    // Seleciona o modal usando Bootstrap (certifique-se de que o Bootstrap JS está incluído no projeto)
+    let myModal = new bootstrap.Modal(document.querySelector('.modal'));
+    let selectedTaskId = null; // Variável para armazenar o ID da tarefa selecionada
+    
+    async function fetchTasks() {
+        try {
+            let response = await fetch('fetch_data.php'); // Caminho para seu arquivo PHP
+            if (!response.ok) {
+                throw new Error('Erro na requisição: ' + response.statusText);
+            }
+            let data = await response.json();
+    
+            // Seleciona o contêiner onde os dados serão inseridos
+            let container = document.querySelector('#task-container'); // Certifique-se de ter esse contêiner no seu HTML
+    
+            // Iterar sobre os dados e criar elementos DOM
+            data.forEach((item) => {
+                // Criar um novo elemento para cada item (pode ser div, li, tr, etc.)
+                let taskElement = document.createElement('li');
+                taskElement.textContent = `Task: ${item.task_title} - Status: ${item.task_status}`;
+    
+                taskElement.setAttribute('data-date', item.created_at);
+                // Adicionar evento de clique para abrir o modal com as informações da tarefa
+                taskElement.addEventListener('click', () => {
+                    // Preencher os campos do modal com as informações do item clicado
+                    document.getElementById('text_title').value = item.task_title;
+                    document.getElementById('full_text_description').value = item.task_description;
+    
+                    // Armazenar o ID da tarefa selecionada
+                    selectedTaskId = item.id;
+    
+                    // Exibir o modal
+                    myModal.show();
+                });
+    
+                // Adicionar o elemento ao contêiner
+                container.appendChild(taskElement);
+
+                console.log(item.created_at)
+            });
+        } catch (error) {
+            console.error('Erro ao buscar dados:', error);
+        }
+    }
+    
+    
+    // Evento do botão "Salvar alterações" fora do loop
+    document.getElementById('saveChangesButton').addEventListener('click', function() {
+        // Verifica se há um ID de tarefa selecionado
+        if (selectedTaskId !== null) {
+            // Obter os valores dos inputs
+            let taskTitle = document.getElementById('text_title').value;
+            let taskDescription = document.getElementById('full_text_description').value;
+    
+            // Enviar os dados via AJAX
+            fetch('update_content.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'task_id': selectedTaskId,
+                    'text_title': taskTitle,
+                    'full_text_description': taskDescription
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Tarefa atualizada com sucesso!');
+                } else {
+                    alert('Erro ao atualizar: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+            });
+        } else {
+            alert('Nenhuma tarefa selecionada.');
+        }
+    });
+    
+    // Chamar a função para buscar e exibir os dados
+    fetchTasks();
+</script> -->
+  
+
+<!-- script de criação de tabelas -->
+   
+    
+    <!-- <script>
+        $(document).ready(function() {
+    // Função para alternar o status da tarefa
+    $('.complete-task').click(function() {
+        var taskId = $(this).data('id'); // Pegar o ID da tarefa
+        var currentStatus = $(this).data('status'); // Pegar o status atual
+
+        $.ajax({
+            url: 'update_task_status.php',
+            method: 'POST',
+            data: {
+                task_id: taskId,
+                current_status: currentStatus
+            },
+            success: function(response) {
+                alert(response); // Exibe o retorno do PHP
+                location.reload(); // Atualiza a página para ver o novo status
+            },
+            error: function(xhr, status, error) {
+                console.log("Erro: " + error);
+                console.log("Status: " + status);
+                console.log("Resposta do servidor: " + xhr.responseText);
+            }
+        });
+    });
+});
+
+    </script> -->
+   
+    <!-- ----- script de busca -->
+
+    <script>
+        function filterTasks(){
+            let searchItem = document.getElementById('search-task').value.toLowerCase();
+            const listTasks  = document.querySelectorAll('#task-container li');
+
+            listTasks.forEach(li => {
+                const id = li.textContent.toLowerCase();
+        
+
+                if(id.includes(searchItem)){
+                    li.classList.remove('hidden');
+                } else {
+                    li.classList.add('hidden')
+                }
+            })
+        }
+
+        document.getElementById('search-task').addEventListener('input',filterTasks)
+
+        window.addEventListener('load',filterTasks);
+
+        const listBody  = document.querySelector('#task-container');
+        const observer = new MutationObserver(filterTasks);
+
+        observer.observe(listBody,{
+            childList:true,
+            subtree:true
+        })
+
+    </script>
+ 
+   <!-- <script>
+        document.getElementById('sort-options').addEventListener('change', function() {
+    const sortOption = this.value;
+    const taskContainer = document.getElementById('task-container');
+    const tasks = Array.from(taskContainer.querySelectorAll('li'));
+
+    console.log(tasks)
+    console.log(taskContainer)
+
+    function reset(){
+        sortedTasks = tasks;
+        console.log('voce quer resetar')
+    }
+
+    if (sortOption === 'alphabetical') {
+        reset()
+        // Ordenar por ordem alfabética com base no conteúdo da task
+        sortedTasks.sort((a, b) => {
+            const taskA = a.textContent.toLowerCase();
+            const taskB = b.textContent.toLowerCase();
+            return taskA.localeCompare(taskB);
+        });
+        console.log('voce selecionou a ordem alfabetica')
+        console.log('voce alterou o codigo')
+    } else if (sortOption === 'date') {
+        reset()
+        // Ordenar por data de criação (presumindo que cada <li> tem um atributo data-date)
+        sortedTasks.sort((a, b) => {
+            const dateA = new Date(a.getAttribute('data-date'));
+            const dateB = new Date(b.getAttribute('data-date'));
+            return dateA - dateB;
+        });
+        console.log('voce selecionou a ordem por data')
+        console.log('voce alterou o codigo')
+    } else {
+        // Se o valor for 'default', mantenha a ordem padrão
+        sortedTasks = tasks;
+        console.log('voce selecionou a ordem alfabetica')
+    }
+
+    // Atualizar a lista de tarefas com a nova ordem
+    taskContainer.innerHTML = '';
+    sortedTasks.forEach(task => {
+        taskContainer.appendChild(task);
+    });
+});
+
+    </script>  -->
+   <script>
+
+document.getElementById('sort-options').addEventListener('click', function() {
+    const sortOption = this.value;
+    const taskContainer = document.getElementById('task-container');
+    
+    // Armazena a ordem original das tasks ao carregar a página
+    const originalOrder = Array.from(taskContainer.querySelectorAll('li'));
+    
+    // Sempre começa com uma cópia da ordem original
+    let sortedTasks = [...originalOrder];
+
+    // Lógica de ordenação
+    switch (sortOption) {
+        case 'alphabetical':
+            sortedTasks.sort((a, b) => {
+                const taskA = a.textContent.toLowerCase();
+                const taskB = b.textContent.toLowerCase();
+                return taskA.localeCompare(taskB);
+            });
+            console.log('Você selecionou a ordem alfabética');
+            break;
+        case 'date':
+            sortedTasks.sort((a, b) => {
+                const dateA = new Date(a.getAttribute('data-date'));
+                const dateB = new Date(b.getAttribute('data-date'));
+                return  dateB - dateA ;
+            });
+            console.log('Você selecionou a ordem por data');
+            break;
+        case 'default':
+            // Restora a ordem original
+            sortedTasks = sortedTasks;
+            console.log('Você selecionou a ordem padrão');
+            break;
+    }
+
+    // Atualizar a lista de tarefas com a nova ordem
+    taskContainer.innerHTML = ''; // Limpa o container da lista
+    sortedTasks.forEach(task => {
+        taskContainer.appendChild(task); // Adiciona novamente os itens ordenados
+    });
+});
+
+    </script> 
+</body>
+</html>
